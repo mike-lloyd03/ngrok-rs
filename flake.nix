@@ -81,6 +81,22 @@
             pre-commit
           ])}
         '';
+        # Make sure that cargo semver-checks uses the stable toolchain rather
+        # than the nightly one that we normally develop with.
+        semver-checks = with pkgs; symlinkJoin {
+          name = "cargo-semver-checks";
+          paths = [ cargo-semver-checks ];
+          buildInputs = [ makeWrapper ];
+          postBuild = ''
+            wrapProgram $out/bin/cargo-semver-checks \
+              --prefix PATH : ${rustc}/bin \
+              --prefix PATH : ${cargo}/bin
+          '';
+        };
+        extract-version = with pkgs; writeShellScriptBin "extract-crate-version" ''
+          ${cargo}/bin/cargo metadata --format-version 1 --no-deps | \
+            ${jq}/bin/jq -r ".packages[] | select(.name == \"$1\") | .version"
+        '';
       in
       {
         devShell = pkgs.mkShell {
@@ -88,12 +104,19 @@
           CHALK_SOLVER_MAX_SIZE = 1500;
           OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
           OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
+          RUSTC_WRAPPER="${pkgs.sccache}/bin/sccache";
           buildInputs = with pkgs; [
             toolchain
             fix-n-fmt
             setup-hooks
             cargo-udeps
-          ] ++ lib.optionals stdenv.isDarwin [ pkgs.darwin.apple_sdk.frameworks.Security ];
+            semver-checks
+            extract-version
+          ] ++ lib.optionals stdenv.isDarwin [
+            # nix darwin stdenv has broken libiconv: https://github.com/NixOS/nixpkgs/issues/158331
+            libiconv
+            pkgs.darwin.apple_sdk.frameworks.Security
+          ];
         };
       });
 }

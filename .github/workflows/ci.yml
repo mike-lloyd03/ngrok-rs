@@ -12,10 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: cachix/install-nix-action@v18
-      - run: curl --retry 5 --retry-all-errors -sfL https://direnv.net/install.sh | bash
-      - run: direnv allow
-      - run: direnv export gha >> "$GITHUB_ENV"
+      - uses: jrobsonchase/direnv-action@v0.7
+      - uses: ./.github/workflows/rust-cache
       - uses: actions-rs/cargo@v1
         with:
           command: udeps
@@ -26,10 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: cachix/install-nix-action@v18
-      - run: curl --retry 5 --retry-all-errors -sfL https://direnv.net/install.sh | bash
-      - run: direnv allow
-      - run: direnv export gha >> "$GITHUB_ENV"
+      - uses: jrobsonchase/direnv-action@v0.7
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
@@ -40,10 +35,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: cachix/install-nix-action@v18
-      - run: curl --retry 5 --retry-all-errors -sfL https://direnv.net/install.sh | bash
-      - run: direnv allow
-      - run: direnv export gha >> "$GITHUB_ENV"
+      - uses: jrobsonchase/direnv-action@v0.7
+      - uses: ./.github/workflows/rust-cache
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
@@ -54,10 +47,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: cachix/install-nix-action@v18
-      - run: curl --retry 5 --retry-all-errors -sfL https://direnv.net/install.sh | bash
-      - run: direnv allow
-      - run: direnv export gha >> "$GITHUB_ENV"
+      - uses: jrobsonchase/direnv-action@v0.7
+      - uses: ./.github/workflows/rust-cache
       - uses: actions-rs/cargo@v1
         env:
           NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
@@ -75,9 +66,64 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+      # We don't actualy have sccache installed here (yet), but it still
+      # benefits from the cargo cache.
+      - uses: ./.github/workflows/rust-cache
       - uses: actions-rs/cargo@v1
         env:
           NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
         with:
           command: test
           args: --features=paid-tests,long-tests --workspace --all-targets
+
+  semver:
+    name: Semver Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        crate: [muxado, ngrok]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: jrobsonchase/direnv-action@v0.7
+      - uses: ./.github/workflows/rust-cache
+      - uses: actions-rs/cargo@v1
+        name: semver checks
+        with:
+          command: semver-checks
+          args: check-release -p ${{ matrix.crate }}
+
+  # These are sequenced because the muxado version referenced by ngrok has to
+  # exist on crates.io before ngrok can be published.
+  publish-muxado:
+    name: Publish muxado
+    uses: ./.github/workflows/release.yml
+    needs: [udeps, fmt, clippy, test-nix, test-stable, semver]
+    if: github.ref_name == 'main' && github.repository == 'ngrok/ngrok-rs'
+    permissions:
+      contents: write
+    with:
+      crate: muxado
+    secrets:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  publish-ngrok:
+    name: Publish ngrok
+    uses: ./.github/workflows/release.yml
+    needs: [publish-muxado]
+    permissions:
+      contents: write
+    with:
+      crate: ngrok
+    secrets:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  publish-cargo-doc-ngrok:
+    name: Publish cargo-doc-ngrok
+    uses: ./.github/workflows/release.yml
+    needs: [publish-ngrok]
+    permissions:
+      contents: write
+    with:
+      crate: cargo-doc-ngrok
+    secrets:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

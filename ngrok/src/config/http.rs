@@ -1,10 +1,14 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    str::FromStr,
+};
 
 use async_trait::async_trait;
 use bytes::{
     self,
     Bytes,
 };
+use thiserror::Error;
 
 use super::{
     common::ProxyProto,
@@ -37,6 +41,11 @@ use crate::{
     Session,
 };
 
+/// Error representing invalid string for Scheme
+#[derive(Debug, Clone, Error)]
+#[error("invalid scheme string: {}", .0)]
+pub struct InvalidSchemeString(String);
+
 /// The URL scheme for this HTTP endpoint.
 ///
 /// [Scheme::HTTPS] will enable TLS termination at the ngrok edge.
@@ -47,6 +56,18 @@ pub enum Scheme {
     /// The `https` URL scheme.
     #[default]
     HTTPS,
+}
+
+impl FromStr for Scheme {
+    type Err = InvalidSchemeString;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use Scheme::*;
+        Ok(match s.to_uppercase().as_str() {
+            "HTTP" => HTTP,
+            "HTTPS" => HTTPS,
+            _ => return Err(InvalidSchemeString(s.into())),
+        })
+    }
 }
 
 /// The options for a HTTP edge.
@@ -210,22 +231,22 @@ impl HttpTunnelBuilder {
         self
     }
 
-    /// with_request_header adds a header to all requests to this edge.
+    /// request_header adds a header to all requests to this edge.
     pub fn request_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.options.request_headers.add(name, value);
         self
     }
-    /// with_response_header adds a header to all responses coming from this edge.
+    /// response_header adds a header to all responses coming from this edge.
     pub fn response_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.options.response_headers.add(name, value);
         self
     }
-    /// with_remove_request_header removes a header from requests to this edge.
+    /// remove_request_header removes a header from requests to this edge.
     pub fn remove_request_header(mut self, name: impl Into<String>) -> Self {
         self.options.request_headers.remove(name);
         self
     }
-    /// with_remove_response_header removes a header from responses from this edge.
+    /// remove_response_header removes a header from responses from this edge.
     pub fn remove_response_header(mut self, name: impl Into<String>) -> Self {
         self.options.response_headers.remove(name);
         self
@@ -294,7 +315,7 @@ mod test {
             .deny_cidr_string(DENY_CIDR)
             .proxy_proto(ProxyProto::V2)
             .metadata(METADATA)
-            .scheme(Scheme::HTTPS)
+            .scheme(Scheme::from_str("hTtPs").unwrap())
             .domain(DOMAIN)
             .mutual_tlsca(CA_CERT.into())
             .mutual_tlsca(CA_CERT2.into())

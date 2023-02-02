@@ -382,37 +382,44 @@ impl<'de> Deserialize<'de> for EdgeType {
     }
 }
 
+/// A request from the ngrok dashboard for the agent to stop.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
 #[serde(rename_all = "PascalCase")]
-pub struct Stop;
+pub struct Stop {}
 
+/// Common response structure for all remote commands originating from the ngrok
+/// dashboard.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "PascalCase")]
-pub struct StopResp {}
+pub struct CommandResp {
+    /// The error arising from command handling, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+pub type StopResp = CommandResp;
 
 rpc_req!(Stop, StopResp, STOP_REQ);
 
+/// A request from the ngrok dashboard for the agent to restart.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
 #[serde(rename_all = "PascalCase")]
-pub struct Restart;
+pub struct Restart {}
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-#[serde(rename_all = "PascalCase")]
-pub struct RestartResp {}
-
+pub type RestartResp = CommandResp;
 rpc_req!(Restart, RestartResp, RESTART_REQ);
 
+/// A request from the ngrok dashboard for the agent to update itself.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "PascalCase")]
 pub struct Update {
+    /// The version that the agent is requested to update to.
     pub version: String,
+    /// Whether or not updating to the same major version is sufficient.
     pub permit_major_version: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-#[serde(rename_all = "PascalCase")]
-pub struct UpdateResp {}
-
+pub type UpdateResp = CommandResp;
 rpc_req!(Update, UpdateResp, UPDATE_REQ);
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
@@ -642,6 +649,7 @@ pub struct WebhookVerification {
 pub struct MutualTls {
     #[serde(default, skip_serializing_if = "is_default")]
     #[serde(with = "base64bytes")]
+    // this is snake-case on the wire
     pub mutual_tls_ca: Vec<u8>,
 }
 
@@ -664,7 +672,7 @@ pub struct WebsocketTcpConverter {}
 pub struct TcpEndpoint {
     pub addr: String,
     pub proxy_proto: ProxyProto,
-
+    #[serde(rename = "IPRestriction")]
     pub ip_restriction: Option<IpRestriction>,
 }
 
@@ -674,10 +682,14 @@ pub struct TlsEndpoint {
     pub hostname: String,
     pub subdomain: String,
     pub proxy_proto: ProxyProto,
+    #[serde(rename = "MutualTLSAtAgent")]
     pub mutual_tls_at_agent: bool,
 
+    #[serde(rename = "MutualTLSAtEdge")]
     pub mutual_tls_at_edge: Option<MutualTls>,
+    #[serde(rename = "TLSTermination")]
     pub tls_termination: Option<TlsTermination>,
+    #[serde(rename = "IPRestriction")]
     pub ip_restriction: Option<IpRestriction>,
 }
 
@@ -685,7 +697,7 @@ pub struct TlsEndpoint {
 pub struct TlsTermination {
     #[serde(with = "base64bytes", skip_serializing_if = "is_default")]
     pub cert: Vec<u8>,
-    #[serde(skip_serializing_if = "is_default")]
+    #[serde(skip_serializing_if = "is_default", default)]
     pub key: SecretBytes,
     #[serde(with = "base64bytes", skip_serializing_if = "is_default")]
     pub sealed_key: Vec<u8>,

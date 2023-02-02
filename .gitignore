@@ -1,6 +1,7 @@
 /target
 /Cargo.lock
 .direnv
+/.vscode
 *.swp
 .env
 __pycache__
