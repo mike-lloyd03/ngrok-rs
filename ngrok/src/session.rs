@@ -1,9 +1,13 @@
 use std::{
     collections::HashMap,
     env,
-    future::Future,
+    future::{
+        Future,
+        IntoFuture,
+    },
     io,
     num::ParseIntError,
+    pin::Pin,
     sync::{
         atomic::{
             AtomicBool,
@@ -231,6 +235,14 @@ pub struct SessionBuilder {
     handlers: CommandHandlers,
     cookie: Option<SecretString>,
     id: Option<String>,
+}
+
+impl IntoFuture for SessionBuilder {
+    type IntoFuture = Pin<Box<dyn Future<Output = Result<Session, ConnectError>>>>;
+    type Output = Result<Session, ConnectError>;
+    fn into_future(self) -> Self::IntoFuture {
+        async move { self.connect().await }.boxed()
+    }
 }
 
 /// Errors arising at [SessionBuilder::connect] time.

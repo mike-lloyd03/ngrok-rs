@@ -52,11 +52,9 @@ async fn main() -> Result<(), Error> {
                 info!(?req, "received update command");
                 Err("unable to update".into())
             })
-            .connect()
             .await?
             .http_endpoint()
             .forwards_to(&forwards_to)
-            .listen()
             .await?;
 
         info!(url = tun.url(), forwards_to, "started tunnel");

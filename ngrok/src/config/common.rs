@@ -83,6 +83,16 @@ macro_rules! impl_builder {
                 })
             }
         }
+
+        impl std::future::IntoFuture for $name {
+            type IntoFuture = std::pin::Pin<Box<dyn std::future::Future<Output = Self::Output>>>;
+            type Output = Result<$tun, RpcError>;
+
+            fn into_future(self) -> Self::IntoFuture {
+                use futures::FutureExt;
+                async move { self.listen().await }.boxed()
+            }
+        }
     };
 }
 /// Tunnel configuration trait, implemented by our top-level config objects.
